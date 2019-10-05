@@ -62,6 +62,56 @@ class AlgoStrategy(gamelib.AlgoCore):
         game_state.submit_turn()
 
 
+    def general_attack_strategy(self, game_state):
+        '''
+        Ultimately, we are trying an attack down the middle.
+        1) Build lines on both sides
+          - This enables us 4 attack points (2 release and 2 gates)
+                - We should check which of these 4 attack points is blocked
+                    - Check to see if it the blocker is strong (like a filter) or weak
+                - Check which of these attack points causes damage to encryptors
+        2) Send attack for best line
+        '''
+        pre_wall_release_locations = [[13, 0], [14, 0]] # these locations are for before the wall
+        after_wall_release_locations = [[1, 12], [26, 12]] # hard coded for now, but are the left and right corners
+
+        if (game_state.turn_number > 3 and game_state.turn_number % 2 == 0):
+            self.build_left_wall(game_state)
+            game_state.attempt_spawn(PING, [14, 0], 10000)
+
+    def build_left_wall(self, game_state):
+        left_wall_locations = [[13, 2],[14, 0], [12, 3], [11, 4], [10, 5], [9, 6], [8, 7], [7, 8], [6, 9], [5, 10]]
+        game_state.attempt_spawn(ENCRYPTOR, left_wall_locations)
+
+
+
+    def least_damage_spawn_location(self, game_state, location_options):
+        """
+        This function will help us guess which location is the safest to spawn moving units from.
+        It gets the path the unit will take then checks locations on that path to 
+        estimate the path's damage risk.
+        """
+        damages = []
+        # Get the damage estimate each path will take
+        for location in location_options:
+            path = game_state.find_path_to_edge(location)
+            damage = 0
+            for path_location in path:
+                # Get number of enemy destructors that can attack the final location and multiply by destructor damage
+                damage += len(game_state.get_attackers(path_location, 0)) * gamelib.GameUnit(DESTRUCTOR, game_state.config).damage
+            damages.append(damage)
+        
+        # Now just return the location that takes the least damage
+        return location_options[damages.index(min(damages))]
+
+    def filter_blocked_locations(self, locations, game_state):
+        filtered = []
+        for location in locations:
+            if not game_state.contains_stationary_unit(location):
+                filtered.append(location)
+        return filtered
+
+
     """
     NOTE: All the methods after this point are part of the sample starter-algo
     strategy and can safely be replaced for your custom algo.
@@ -75,33 +125,34 @@ class AlgoStrategy(gamelib.AlgoCore):
         For offense we will use long range EMPs if they place stationary units near the enemy's front.
         If there are no stationary units to attack in the front, we will send Pings to try and score quickly.
         """
+        self.general_attack_strategy(game_state)
         # First, place basic defenses
-        self.build_defences(game_state)
-        # Now build reactive defenses based on where the enemy scored
-        self.build_reactive_defense(game_state)
+        # self.build_defences(game_state)
+        # # Now build reactive defenses based on where the enemy scored
+        # self.build_reactive_defense(game_state)
 
-        # If the turn is less than 5, stall with Scramblers and wait to see enemy's base
-        if game_state.turn_number < 5:
-            self.stall_with_scramblers(game_state)
-        else:
-            # Now let's analyze the enemy base to see where their defenses are concentrated.
-            # If they have many units in the front we can build a line for our EMPs to attack them at long range.
-            if self.detect_enemy_unit(game_state, unit_type=None, valid_x=None, valid_y=[14, 15]) > 10:
-                self.emp_line_strategy(game_state)
-            else:
-                # They don't have many units in the front so lets figure out their least defended area and send Pings there.
+        # # If the turn is less than 5, stall with Scramblers and wait to see enemy's base
+        # if game_state.turn_number < 5:
+        #     self.stall_with_scramblers(game_state)
+        # else:
+        #     # Now let's analyze the enemy base to see where their defenses are concentrated.
+        #     # If they have many units in the front we can build a line for our EMPs to attack them at long range.
+        #     if self.detect_enemy_unit(game_state, unit_type=None, valid_x=None, valid_y=[14, 15]) > 10:
+        #         self.emp_line_strategy(game_state)
+        #     else:
+        #         # They don't have many units in the front so lets figure out their least defended area and send Pings there.
 
-                # Only spawn Ping's every other turn
-                # Sending more at once is better since attacks can only hit a single ping at a time
-                if game_state.turn_number % 2 == 1:
-                    # To simplify we will just check sending them from back left and right
-                    ping_spawn_location_options = [[13, 0], [14, 0]]
-                    best_location = self.least_damage_spawn_location(game_state, ping_spawn_location_options)
-                    game_state.attempt_spawn(PING, best_location, 1000)
+        #         # Only spawn Ping's every other turn
+        #         # Sending more at once is better since attacks can only hit a single ping at a time
+        #         if game_state.turn_number % 2 == 1:
+        #             # To simplify we will just check sending them from back left and right
+        #             ping_spawn_location_options = [[13, 0], [14, 0]]
+        #             best_location = self.least_damage_spawn_location(game_state, ping_spawn_location_options)
+        #             game_state.attempt_spawn(PING, best_location, 1000)
 
-                # Lastly, if we have spare cores, let's build some Encryptors to boost our Pings' health.
-                encryptor_locations = [[13, 2], [14, 2], [13, 3], [14, 3]]
-                game_state.attempt_spawn(ENCRYPTOR, encryptor_locations)
+        #         # Lastly, if we have spare cores, let's build some Encryptors to boost our Pings' health.
+        #         encryptor_locations = [[13, 2], [14, 2], [13, 3], [14, 3]]
+        #         game_state.attempt_spawn(ENCRYPTOR, encryptor_locations)
 
     def build_defences(self, game_state):
         """
@@ -176,24 +227,7 @@ class AlgoStrategy(gamelib.AlgoCore):
         # By asking attempt_spawn to spawn 1000 units, it will essentially spawn as many as we have resources for
         game_state.attempt_spawn(EMP, [24, 10], 1000)
 
-    def least_damage_spawn_location(self, game_state, location_options):
-        """
-        This function will help us guess which location is the safest to spawn moving units from.
-        It gets the path the unit will take then checks locations on that path to 
-        estimate the path's damage risk.
-        """
-        damages = []
-        # Get the damage estimate each path will take
-        for location in location_options:
-            path = game_state.find_path_to_edge(location)
-            damage = 0
-            for path_location in path:
-                # Get number of enemy destructors that can attack the final location and multiply by destructor damage
-                damage += len(game_state.get_attackers(path_location, 0)) * gamelib.GameUnit(DESTRUCTOR, game_state.config).damage
-            damages.append(damage)
-        
-        # Now just return the location that takes the least damage
-        return location_options[damages.index(min(damages))]
+
 
     def detect_enemy_unit(self, game_state, unit_type=None, valid_x = None, valid_y = None):
         total_units = 0
@@ -204,12 +238,7 @@ class AlgoStrategy(gamelib.AlgoCore):
                         total_units += 1
         return total_units
         
-    def filter_blocked_locations(self, locations, game_state):
-        filtered = []
-        for location in locations:
-            if not game_state.contains_stationary_unit(location):
-                filtered.append(location)
-        return filtered
+
 
     def on_action_frame(self, turn_string):
         """
