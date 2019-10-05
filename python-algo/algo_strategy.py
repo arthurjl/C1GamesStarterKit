@@ -9,11 +9,8 @@ import json
 """
 Most of the algo code you write will be in this file unless you create new
 modules yourself. Start by modifying the 'on_turn' function.
-
 Advanced strategy tips: 
-
   - You can analyze action frames by modifying on_action_frame function
-
   - The GameState.map object can be manually manipulated to create hypothetical 
   board states. Though, we recommended making a copy of the map to preserve 
   the actual current map state.
@@ -40,7 +37,9 @@ class AlgoStrategy(gamelib.AlgoCore):
         EMP = config["unitInformation"][4]["shorthand"]
         SCRAMBLER = config["unitInformation"][5]["shorthand"]
         # This is a good place to do initial setup
+        self.scored_on_locations = []
         self.destructor_locations = []
+
     
         
 
@@ -113,13 +112,10 @@ class AlgoStrategy(gamelib.AlgoCore):
         # Place destructors that attack enemy units
         self.destructor_locations = [[0, 13], [27, 13], [8, 11], [19, 11], [13, 11], [14, 11]]
         # attempt_spawn will try to spawn units if we have resources, and will check if a blocking unit is already there
-        for destructor_location in destructor_locations:
-            success = game_state.attempt_spawn(DESTRUCTOR, destructor_location)
-            if success == 1:
-                new_filter_location = [destructor_location[0] + 1, destructor_location[1]]
-                game_state.attempt_spawn(FILTER, new_filter_location)
+        
+        game_state.attempt_spawn(DESTRUCTOR, self.destructor_locations)
+        
         # Place filters in front of destructors to soak up damage for them
-        game_state.attempt_spawn(DESTRUCTOR, destructor_locations)
         filter_locations = [[8, 12], [19, 12]]
         game_state.attempt_spawn(FILTER, filter_locations)
 
@@ -129,18 +125,28 @@ class AlgoStrategy(gamelib.AlgoCore):
         We can track where the opponent scored by looking at events in action frames 
         as shown in the on_action_frame function
         """
+        priority_list = {}
+        
         for location in self.scored_on_locations:
+            new_list = []
+            for destructor_location in self.destructor_locations:
+                distance = game_state.game_map.distance_between_locations(destructor_location, location)
+                priority_list[distance] = destructor_location
+            for (element in sorted (priority_list.keys()))
+                new_list.append(priority_list[element])
+
             lowest = 1000
-            for destructor_location in self.destructor_locations
-                distance = distance_between_locations(destructor_location, location)
-                if distance < lowest:
+            for destructor_location in self.destructor_locations:
+                distance = game_state.game_map.distance_between_locations(destructor_location, location)
+                if distance < lowest: 
                     lowest = distance
                     old_location = destructor_location
-        if old_location[0] > 14:
-            new_location = [old_location[0] - 1, old_location[1] - 1
-        else: 
-            new_location = [old_location[0] + 1, old_locatoin[1] + 1]
-        game_state.attempt_spawn(DESTRUCTOR,new_location)
+            if old_location[0] > 14: 
+                new_location = [old_location[0] - 1, old_location[1] - 1]
+            else:
+                new_location = [old_location[0] + 1, old_location[1] - 1]
+            game_state.attempt_spawn(DESTRUCTOR, new_location)
+
     def stall_with_scramblers(self, game_state):
         """
         Send out Scramblers at random locations to defend our base from enemy moving units.
@@ -228,6 +234,7 @@ class AlgoStrategy(gamelib.AlgoCore):
         Processing the action frames is complicated so we only suggest it if you have time and experience.
         Full doc on format of a game frame at: https://docs.c1games.com/json-docs.html
         """
+        # Let's record at what position we get scored on
         state = json.loads(turn_string)
         events = state["events"]
         breaches = events["breach"]
@@ -240,6 +247,7 @@ class AlgoStrategy(gamelib.AlgoCore):
                 gamelib.debug_write("Got scored on at: {}".format(location))
                 self.scored_on_locations.append(location)
                 gamelib.debug_write("All locations: {}".format(self.scored_on_locations))
+
 
 if __name__ == "__main__":
     algo = AlgoStrategy()
